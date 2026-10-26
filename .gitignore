@@ -7,3 +7,5 @@ challenge_data/*.csv.gz
 .ipynb_checkpoints/
 .DS_Store
 .venv/
+challenge_data/DATA_CARD.md
+challenge_data/SHA256SUMS
