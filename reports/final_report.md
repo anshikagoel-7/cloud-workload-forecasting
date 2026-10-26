@@ -57,18 +57,41 @@ Final holdout result (checked once, after the code was frozen): [FILL after runn
 
 ## 7. Error and failure analysis
 
-**Peaks.** Persistence is also the best model on peak periods (peak MAE 0.133). The ridge AR models and the long moving averages have a peak MAE of about 0.31 to 0.33, more than double persistence. [FILL: confirm from the fold chart whether this is mean reversion before keeping that explanation.]
+**Peaks.** Persistence is also the best model on peak periods (peak MAE 0.133). The ridge AR models and the long moving averages have a peak MAE of about 0.31 to 0.33, more than double persistence. This is consistent with forecasts being pulled toward the average, but I did not inspect individual folds, so this is a likely explanation rather than a proven one.
 
-**Error by step ahead.** [FILL: pattern from fig_error_by_step.png]
+**Error by step ahead.** The error is noisy and rises only mildly with the horizon: the average MAE is 0.16 percentage points for steps 1 to 12 and 0.20 for steps 13 to 24. The largest error is at step 22 (0.377) and the smallest at step 6 (0.064). With only three overlapping folds, individual steps should not be over-interpreted.
 
 ![Persistence MAE by steps ahead](fig_error_by_step.png)
 
-**Other failure modes in this data.** The history is only 110 points, so daily cycles cannot be learned. [FILL: regime shift only if your chart shows the series ending below its training average.] `active_vm_count` has no variation, so there is nothing to forecast beyond the constant.
+**The series ends below its average.** The last 10 training values lie between 9.11 and 9.44 (mostly 9.1 to 9.3), while the training mean is 9.41. Models that average over longer windows or revert to the mean forecast a level higher than where the series currently sits, which is consistent with persistence winning.
+
+**Other failure modes.** The history is only 110 points, so daily cycles cannot be learned. `active_vm_count` has no variation, so there is nothing to forecast beyond the constant.
 
 ## 8. Capacity recommendation
 
-[FILL after coverage numbers]
+Policy: `capacity(t) = forecast(t) + k x RMSE_validation`, applied to fleet-average CPU. The validation RMSE of persistence is 0.226 percentage points. Coverage is the share of validation points where the actual value stayed under the line (72 points):
+
+| k | Margin (pp) | Coverage |
+|---|---|---|
+| 0.5 | 0.11 | 79.2% |
+| 1.0 | 0.23 | 91.7% |
+| 1.28 | 0.29 | 97.2% |
+| 1.64 | 0.37 | 100% |
+| 2.0 | 0.45 | 100% |
+
+I recommend k = 1.28, the smallest tested value that reaches a 95% coverage target. Going to k = 1.64 adds 0.08 percentage points of reserve for no extra observed coverage, but it is a reasonable choice for user-facing workloads where an outage is costly.
+
+| | Under-provision (margin too small) | Over-provision (margin too big) |
+|---|---|---|
+| Effect | Slow or failed requests, emergency scaling | Paying for unused capacity |
+| Cost | Hard to predict, can be large | Steady and predictable |
+| Worse for | Interactive, user-facing workloads | Batch / delay-insensitive workloads |
+
+Extra rules:
+- **Segment rule:** use a larger margin for Interactive VMs (hotter, 11.5% vs 8.3% average CPU) and a smaller one for Delay-insensitive VMs, which can wait.
+- **Tail monitor:** the fleet average is very stable, but the 99th percentile VM reaches 87% CPU. The fleet-level margin does not protect individual VMs, so also watch the share of VMs above 80% CPU.
+- **VM count:** reserve for 10,000 VMs. There was no churn in this window, but this may change over longer periods.
 
 ## 9. Limitations and future work
 
-[FILL]
+The model is trained on 110 points (about 9 hours) from one fleet, with no daily cycle visible, so the recommendation is credible for the next 2 hours only. Validation has only three overlapping folds, and the chosen k is based on 72 correlated points, so the coverage numbers are rough. The margin is expressed in fleet-average CPU and is not a per-VM guarantee. Future work: segment-level forecasts (Interactive vs Delay-insensitive), prediction intervals from validation residuals, a tail-share target (VMs above 80% CPU), and more history to test daily patterns.
