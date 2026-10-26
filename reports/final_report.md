@@ -2,7 +2,7 @@
 
 ## 1. Executive summary
 
-I forecast two series for the final 2 hours (24 steps of 5 minutes) of an Azure VM trace: `active_vm_count` and `aggregate_cpu_utilization`. Eight simple candidate models from four families were compared with time-ordered validation. Persistence (repeat the last value) was best for CPU, with a validation MAE of 0.178 percentage points, and no other model beat it. For `active_vm_count` every model was exactly correct (a tie), because no VM is created or deleted in the window, so the forecast is the constant 10,000. I recommend reserving the forecast plus [FILL: k x RMSE] percentage points of CPU, together with a separate watch on the hottest VMs. Final holdout result: [FILL].
+I forecast two series for the final 2 hours (24 steps of 5 minutes) of an Azure VM trace: `active_vm_count` and `aggregate_cpu_utilization`. Eight simple candidate models from four families were compared with time-ordered validation. Persistence (repeat the last value) was best for CPU, with a validation MAE of 0.178 percentage points, and no other model beat it. For `active_vm_count` every model was exactly correct (a tie), because no VM is created or deleted in the window, so the forecast is the constant 10,000. I recommend reserving the forecast plus 0.29 percentage points of CPU (1.28 x the validation RMSE of 0.226, which covered 97% of validation points), together with a separate watch on the hottest VMs. On the final 24-step holdout (checked once, after the code was frozen), CPU MAE was 0.147 percentage points and RMSE 0.185, which is below the validation figures; active_vm_count was predicted exactly.
 
 ## 2. Data and preprocessing
 
@@ -14,7 +14,7 @@ The model works at the native 5-minute cadence, so each of the 24 predictions ma
 
 **Zero churn.** All 10,000 VMs were created at the start of the trace and none was deleted inside the window (median lifetime about 720 hours). So `active_vm_count` is constant at 10,000. *So what:* VM count needs no model, but this may not hold outside an 11-hour window.
 
-**Flat fleet average.** Fleet-average CPU has mean 9.41%, standard deviation 0.19 and range 9.11% to 9.91%. Lag-1 autocorrelation is 0.67. *So what:* the latest value is informative, which is why persistence is a strong baseline. [FILL: peak steps and where the series ends, from fig_cpu.png]
+**Flat fleet average.** Fleet-average CPU has mean 9.41%, standard deviation 0.19 and range 9.11% to 9.91%. Lag-1 autocorrelation is 0.67. *So what:* the latest value is informative, which is why persistence is a strong baseline. The five highest values (9.84% to 9.91%) fall at steps 55 to 68, and four of the five lowest values (9.11% to 9.12%) fall at steps 91 to 108, near the end of the training window (the fifth is at step 28). The series therefore ends near its low point, below its training average (the last 10 values are mostly 9.1 to 9.3 against a mean of 9.41).
 
 ![Fleet-average CPU over the training window](fig_cpu.png)
 
@@ -53,7 +53,7 @@ Validation results for `aggregate_cpu_utilization` (percentage points of CPU; `p
 
 No model beat persistence. The closest was ridge AR with 3 lags, 8% worse on MAE. For `active_vm_count` every model had zero error on every fold, so the table shows no difference between them. Percentage metrics are not informative for a constant series.
 
-Final holdout result (checked once, after the code was frozen): [FILL after running --final-holdout]
+Final holdout result (checked once, after the code was frozen): for aggregate_cpu_utilization, MAE = 0.1468 and RMSE = 0.1848 percentage points, against 0.1784 and 0.2260 on validation. The chosen model is persistence, so its holdout error is identical to the persistence baseline by construction; this check shows the error level on unseen data, not an improvement over the baseline. For active_vm_count the forecast of 10,000 had zero error. The holdout is a single 24-step window, so it should be read as one sample, not as proof of general accuracy.
 
 ## 7. Error and failure analysis
 
